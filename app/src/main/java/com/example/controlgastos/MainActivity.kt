@@ -1,6 +1,5 @@
 package com.example.controlgastos
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,10 +8,14 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.controlgastos.ui.theme.ControlGastosTheme
@@ -25,7 +28,6 @@ class MainActivity : ComponentActivity() {
 
     private val vm: ExpensesViewModel by viewModels()
 
-    // Launcher para Google Sign-In
     private val googleLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
@@ -34,12 +36,11 @@ class MainActivity : ComponentActivity() {
                 val idToken = account.idToken
                 if (idToken != null) vm.signInWithGoogleIdToken(idToken)
             } catch (e: Exception) {
-                // El ViewModel mostrará error si falla el sign-in
+                // Error manejado por el ViewModel
             }
         }
 
     private fun startGoogleSignIn() {
-        // Requiere que exista R.string.default_web_client_id (lo obtienes al añadir SHA-1)
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(getString(R.string.default_web_client_id))
             .requestEmail()
@@ -58,7 +59,8 @@ class MainActivity : ComponentActivity() {
                         LoginScreen(
                             onLoginEmail = { e, p -> vm.loginWithEmail(e, p) },
                             onRegisterEmail = { e, p -> vm.registerWithEmail(e, p) },
-                            onLoginGoogle = { startGoogleSignIn() }
+                            onLoginGoogle = { startGoogleSignIn() },
+                            vm = vm
                         )
                     } else {
                         HomeScreen(vm = vm, onLogout = { vm.signOut() })
@@ -69,57 +71,174 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LoginScreen(
     onLoginEmail: (String, String) -> Unit,
     onRegisterEmail: (String, String) -> Unit,
-    onLoginGoogle: () -> Unit
+    onLoginGoogle: () -> Unit,
+    vm: ExpensesViewModel
 ) {
     var email by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
+    val ui by vm.ui.collectAsState()
 
     Column(
         Modifier
             .fillMaxSize()
-            .padding(20.dp),
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
-    ) { 
-        Text("Control de Gastos", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(16.dp))
-        OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") })
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = pass, onValueChange = { pass = it },
-            label = { Text("Contraseña") }, visualTransformation = PasswordVisualTransformation()
+    ) {
+        Icon(
+            imageVector = Icons.Default.ShoppingCart,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = MaterialTheme.colorScheme.primary
         )
+
         Spacer(Modifier.height(16.dp))
-        Button(onClick = { onLoginEmail(email, pass) }, modifier = Modifier.fillMaxWidth()) {
+
+        Text(
+            "Control de Gastos",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            "Administra tus finanzas personales",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(32.dp))
+
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("Email") },
+            leadingIcon = { Icon(Icons.Default.Email, null) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = pass,
+            onValueChange = { pass = it },
+            label = { Text("Contraseña") },
+            leadingIcon = { Icon(Icons.Default.Lock, null) },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        when (ui) {
+            is UiState.Error -> {
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        (ui as UiState.Error).message,
+                        modifier = Modifier.padding(12.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            is UiState.Info -> {
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Text(
+                        (ui as UiState.Info).message,
+                        modifier = Modifier.padding(12.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            else -> {}
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Button(
+            onClick = { onLoginEmail(email, pass) },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            enabled = ui != UiState.Loading
+        ) {
+            if (ui == UiState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             Text("Iniciar sesión")
         }
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = { onRegisterEmail(email, pass) }, modifier = Modifier.fillMaxWidth()) {
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = { onRegisterEmail(email, pass) },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            enabled = ui != UiState.Loading
+        ) {
             Text("Crear cuenta")
         }
-        Spacer(Modifier.height(12.dp))
-        Divider()
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = onLoginGoogle, modifier = Modifier.fillMaxWidth()) {
+
+        Spacer(Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HorizontalDivider(modifier = Modifier.weight(1f))
+            Text(
+                "  o  ",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            HorizontalDivider(modifier = Modifier.weight(1f))
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        OutlinedButton(
+            onClick = onLoginGoogle,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            enabled = ui != UiState.Loading
+        ) {
+            Icon(Icons.Default.AccountCircle, null)
+            Spacer(Modifier.width(8.dp))
             Text("Continuar con Google")
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(vm: ExpensesViewModel, onLogout: () -> Unit) {
     val gastos by vm.gastos.collectAsState()
+    val gastosFiltrados by vm.gastosFiltrados.collectAsState()
     val total by vm.totalMes.collectAsState()
     val ui by vm.ui.collectAsState()
+    val categorias by vm.categorias.collectAsState()
+    val categoryStats by vm.categoryStats.collectAsState()
+    val filtroCategoria by vm.filtroCategoria.collectAsState()
 
-    var nombre by remember { mutableStateOf("") }
-    var categoria by remember { mutableStateOf("") }
-    var monto by remember { mutableStateOf("") }
-    var nota by remember { mutableStateOf("") }
+    var mostrarFormulario by remember { mutableStateOf(false) }
+    var mostrarEstadisticas by remember { mutableStateOf(false) }
+    var gastoAEditar by remember { mutableStateOf<Gasto?>(null) }
 
     val cal = remember { Calendar.getInstance() }
     var year by remember { mutableStateOf(cal.get(Calendar.YEAR)) }
@@ -129,65 +248,543 @@ private fun HomeScreen(vm: ExpensesViewModel, onLogout: () -> Unit) {
         vm.loadGastosDelMes(year, month)
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Mes: $month/$year", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = {
-                if (month == 1) { month = 12; year -= 1 } else month -= 1
-                vm.loadGastosDelMes(year, month)
-            }) { Text("Anterior") }
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = {
-                if (month == 12) { month = 1; year += 1 } else month += 1
-                vm.loadGastosDelMes(year, month)
-            }) { Text("Siguiente") }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onLogout) { Text("Cerrar sesión") }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Text("Total del mes: $total", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(12.dp))
-
-        // Formulario rápido
-        OutlinedTextField(nombre, { nombre = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(6.dp))
-        OutlinedTextField(categoria, { categoria = it }, label = { Text("Categoría") }, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(6.dp))
-        OutlinedTextField(monto, { monto = it }, label = { Text("Monto") }, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(6.dp))
-        OutlinedTextField(nota, { nota = it }, label = { Text("Nota (opcional)") }, modifier = Modifier.fillMaxWidth())
-
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = {
-            vm.agregarGasto(nombre, categoria, monto, nota)
-            // limpiar inputs si quieres
-            nombre = ""; categoria = ""; monto = ""; nota = ""
-        }) { Text("Agregar gasto") }
-
-        Spacer(Modifier.height(12.dp))
-        Divider()
-        Spacer(Modifier.height(8.dp))
-
-        LazyColumn(Modifier.weight(1f)) {
-            items(gastos) { g ->
-                ListItem(
-                    headlineContent = { Text("${g.nombre} - $${g.monto}") },
-                    supportingContent = { Text("${g.categoria} • ${g.nota}") },
-                    trailingContent = {
-                        TextButton(onClick = { vm.eliminarGasto(g.id) }) { Text("Eliminar") }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Control de Gastos") },
+                actions = {
+                    IconButton(onClick = { mostrarEstadisticas = !mostrarEstadisticas }) {
+                        Icon(Icons.Default.Info, "Estadísticas")
                     }
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Default.Close, "Cerrar sesión")
+                    }
+                }
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { mostrarFormulario = true },
+                icon = { Icon(Icons.Default.Add, null) },
+                text = { Text("Agregar Gasto") }
+            )
+        }
+    ) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+        ) {
+            // Selector de mes
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
                 )
-                Divider()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = {
+                        if (month == 1) {
+                            month = 12
+                            year -= 1
+                        } else {
+                            month -= 1
+                        }
+                        vm.loadGastosDelMes(year, month)
+                    }) {
+                        Icon(Icons.Default.KeyboardArrowLeft, "Mes anterior")
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            getNombreMes(month),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            year.toString(),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    IconButton(onClick = {
+                        if (month == 12) {
+                            month = 1
+                            year += 1
+                        } else {
+                            month += 1
+                        }
+                        vm.loadGastosDelMes(year, month)
+                    }) {
+                        Icon(Icons.Default.KeyboardArrowRight, "Mes siguiente")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Total del mes
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Total del Mes",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Text(
+                        "$${String.format("%.2f", total)}",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Text(
+                        "${gastos.size} gastos registrados",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Filtro por categoría
+            if (categorias.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Filtrar:", style = MaterialTheme.typography.bodyMedium)
+
+                    FilterChip(
+                        selected = filtroCategoria == null,
+                        onClick = { vm.setFiltroCategoria(null) },
+                        label = { Text("Todas") }
+                    )
+
+                    categorias.take(3).forEach { cat ->
+                        FilterChip(
+                            selected = filtroCategoria == cat,
+                            onClick = {
+                                vm.setFiltroCategoria(if (filtroCategoria == cat) null else cat)
+                            },
+                            label = { Text(cat) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
+            // Estadísticas por categoría
+            if (mostrarEstadisticas && categoryStats.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Gastos por Categoría",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(12.dp))
+
+                        categoryStats.forEach { stat ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        stat.categoria,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        "${stat.cantidad} gasto${if (stat.cantidad != 1) "s" else ""}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        "$${String.format("%.2f", stat.total)}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "${String.format("%.1f", stat.porcentaje)}%",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+
+                            LinearProgressIndicator(
+                                progress = { (stat.porcentaje / 100).toFloat() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                            )
+
+                            if (stat != categoryStats.last()) {
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
+            // Lista de gastos
+            when {
+                ui is UiState.Loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                gastosFiltrados.isEmpty() -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Default.ShoppingCart,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                if (filtroCategoria != null)
+                                    "No hay gastos en esta categoría"
+                                else
+                                    "No hay gastos registrados",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(gastosFiltrados, key = { it.id }) { gasto ->
+                            GastoCard(
+                                gasto = gasto,
+                                onDelete = { vm.eliminarGasto(gasto.id) },
+                                formatearFecha = { vm.formatearFecha(it) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Mensajes de estado
+            when (ui) {
+                is UiState.Error -> {
+                    Spacer(Modifier.height(8.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            (ui as UiState.Error).message,
+                            modifier = Modifier.padding(12.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+                is UiState.Info -> {
+                    Spacer(Modifier.height(8.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Text(
+                            (ui as UiState.Info).message,
+                            modifier = Modifier.padding(12.dp),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(2000)
+                        vm.clearUiState()
+                    }
+                }
+                else -> {}
             }
         }
+    }
 
-        when (ui) {
-            is UiState.Error -> Text((ui as UiState.Error).message, color = MaterialTheme.colorScheme.error)
-            is UiState.Info -> Text((ui as UiState.Info).message, color = MaterialTheme.colorScheme.primary)
-            UiState.Loading -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            UiState.Idle -> {}
+    // Diálogo para agregar gasto
+    if (mostrarFormulario) {
+        AgregarGastoDialog(
+            vm = vm,
+            onDismiss = { mostrarFormulario = false }
+        )
+    }
+}
+
+@Composable
+fun GastoCard(
+    gasto: Gasto,
+    onDelete: () -> Unit,
+    formatearFecha: (com.google.firebase.Timestamp) -> String
+) {
+    var mostrarConfirmacion by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    gasto.nombre,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            gasto.categoria,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    Text(
+                        formatearFecha(gasto.fecha),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (gasto.nota.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        gasto.nota,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    "$${String.format("%.2f", gasto.monto)}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                IconButton(onClick = { mostrarConfirmacion = true }) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Eliminar",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
+    }
+
+    if (mostrarConfirmacion) {
+        AlertDialog(
+            onDismissRequest = { mostrarConfirmacion = false },
+            title = { Text("Confirmar eliminación") },
+            text = { Text("¿Estás seguro de que deseas eliminar este gasto?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete()
+                        mostrarConfirmacion = false
+                    }
+                ) {
+                    Text("Eliminar", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarConfirmacion = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AgregarGastoDialog(
+    vm: ExpensesViewModel,
+    onDismiss: () -> Unit
+) {
+    var nombre by remember { mutableStateOf("") }
+    var categoria by remember { mutableStateOf("") }
+    var monto by remember { mutableStateOf("") }
+    var nota by remember { mutableStateOf("") }
+    var mostrarMenuCategorias by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss
+    ) {
+        Card {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+            ) {
+                Text(
+                    "Agregar Nuevo Gasto",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    label = { Text("Nombre del gasto") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Selector de categoría
+                ExposedDropdownMenuBox(
+                    expanded = mostrarMenuCategorias,
+                    onExpandedChange = { mostrarMenuCategorias = it }
+                ) {
+                    OutlinedTextField(
+                        value = categoria,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Categoría") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(mostrarMenuCategorias) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = mostrarMenuCategorias,
+                        onDismissRequest = { mostrarMenuCategorias = false }
+                    ) {
+                        vm.categoriasComunes.forEach { cat ->
+                            DropdownMenuItem(
+                                text = { Text(cat) },
+                                onClick = {
+                                    categoria = cat
+                                    mostrarMenuCategorias = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = monto,
+                    onValueChange = { monto = it },
+                    label = { Text("Monto") },
+                    leadingIcon = { Text("$") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = nota,
+                    onValueChange = { nota = it },
+                    label = { Text("Nota (opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+
+                Spacer(Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancelar")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            vm.agregarGasto(nombre, categoria, monto, nota)
+                            onDismiss()
+                        }
+                    ) {
+                        Text("Agregar")
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun getNombreMes(mes: Int): String {
+    return when (mes) {
+        1 -> "Enero"
+        2 -> "Febrero"
+        3 -> "Marzo"
+        4 -> "Abril"
+        5 -> "Mayo"
+        6 -> "Junio"
+        7 -> "Julio"
+        8 -> "Agosto"
+        9 -> "Septiembre"
+        10 -> "Octubre"
+        11 -> "Noviembre"
+        12 -> "Diciembre"
+        else -> ""
     }
 }
