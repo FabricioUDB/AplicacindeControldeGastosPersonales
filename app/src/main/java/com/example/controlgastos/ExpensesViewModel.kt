@@ -161,6 +161,13 @@ class ExpensesViewModel : ViewModel() {
         _ui.value = UiState.Idle
     }
 
+    // NUEVA FUNCIÓN: Limpiar estado de error
+    fun clearErrorState() {
+        if (_ui.value is UiState.Error) {
+            _ui.value = UiState.Idle
+        }
+    }
+
     private fun gastosRef(uid: String) =
         db.collection("users").document(uid).collection("gastos")
 

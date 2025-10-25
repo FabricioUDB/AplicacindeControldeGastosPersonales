@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val user by vm.user.collectAsState()
                     if (user == null) {
-                        LoginScreen(
+                        AuthScreen(
                             onLoginEmail = { e, p -> vm.loginWithEmail(e, p) },
                             onRegisterEmail = { e, p -> vm.registerWithEmail(e, p) },
                             onLoginGoogle = { startGoogleSignIn() },
@@ -71,17 +71,53 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@Composable
+private fun AuthScreen(
+    onLoginEmail: (String, String) -> Unit,
+    onRegisterEmail: (String, String) -> Unit,
+    onLoginGoogle: () -> Unit,
+    vm: ExpensesViewModel
+) {
+    var showRegisterScreen by remember { mutableStateOf(false) }
+    val user by vm.user.collectAsState()
+
+    // Si el usuario está autenticado, no mostramos ninguna pantalla de auth
+    if (user != null) {
+        return
+    }
+
+    if (showRegisterScreen) {
+        RegisterScreen(
+            onRegister = onRegisterEmail,
+            onBackToLogin = { showRegisterScreen = false },
+            vm = vm
+        )
+    } else {
+        LoginScreen(
+            onLogin = onLoginEmail,
+            onNavigateToRegister = { showRegisterScreen = true },
+            onLoginGoogle = onLoginGoogle,
+            vm = vm
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LoginScreen(
-    onLoginEmail: (String, String) -> Unit,
-    onRegisterEmail: (String, String) -> Unit,
+    onLogin: (String, String) -> Unit,
+    onNavigateToRegister: () -> Unit,
     onLoginGoogle: () -> Unit,
     vm: ExpensesViewModel
 ) {
     var email by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
     val ui by vm.ui.collectAsState()
+
+    // Limpiar errores cuando se entra a la pantalla
+    LaunchedEffect(Unit) {
+        vm.clearErrorState()
+    }
 
     Column(
         Modifier
@@ -106,7 +142,7 @@ private fun LoginScreen(
         )
 
         Text(
-            "Administra tus finanzas personales",
+            "Inicia sesión en tu cuenta",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -171,7 +207,7 @@ private fun LoginScreen(
         Spacer(Modifier.height(24.dp))
 
         Button(
-            onClick = { onLoginEmail(email, pass) },
+            onClick = { onLogin(email, pass) },
             modifier = Modifier.fillMaxWidth().height(50.dp),
             enabled = ui != UiState.Loading
         ) {
@@ -189,11 +225,11 @@ private fun LoginScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            onClick = { onRegisterEmail(email, pass) },
+            onClick = onNavigateToRegister,
             modifier = Modifier.fillMaxWidth().height(50.dp),
             enabled = ui != UiState.Loading
         ) {
-            Text("Crear cuenta")
+            Text("Crear cuenta nueva")
         }
 
         Spacer(Modifier.height(16.dp))
@@ -225,6 +261,186 @@ private fun LoginScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RegisterScreen(
+    onRegister: (String, String) -> Unit,
+    onBackToLogin: () -> Unit,
+    vm: ExpensesViewModel
+) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    val ui by vm.ui.collectAsState()
+    val user by vm.user.collectAsState()
+
+    // Limpiar errores cuando se entra a la pantalla
+    LaunchedEffect(Unit) {
+        vm.clearErrorState()
+    }
+
+    // Redirigir automáticamente cuando el registro sea exitoso
+    LaunchedEffect(user) {
+        if (user != null) {
+            // El registro fue exitoso, no necesitamos hacer nada más
+            // porque el AuthScreen detectará que user != null
+        }
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Header con botón de regreso
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBackToLogin) {
+                Icon(Icons.Default.ArrowBack, "Volver al login")
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Crear Cuenta",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        Icon(
+            imageVector = Icons.Default.Person,
+            contentDescription = null,
+            modifier = Modifier.size(60.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        Text(
+            "Regístrate para comenzar",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(32.dp))
+
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("Email") },
+            leadingIcon = { Icon(Icons.Default.Email, null) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Contraseña") },
+            leadingIcon = { Icon(Icons.Default.Lock, null) },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("Mínimo 6 caracteres") }
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = confirmPassword,
+            onValueChange = { confirmPassword = it },
+            label = { Text("Confirmar Contraseña") },
+            leadingIcon = { Icon(Icons.Default.Lock, null) },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        // Validación de contraseñas
+        if (password.isNotEmpty() && confirmPassword.isNotEmpty() && password != confirmPassword) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Las contraseñas no coinciden",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        when (ui) {
+            is UiState.Error -> {
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        (ui as UiState.Error).message,
+                        modifier = Modifier.padding(12.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            is UiState.Info -> {
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Text(
+                        (ui as UiState.Info).message,
+                        modifier = Modifier.padding(12.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            else -> {}
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Button(
+            onClick = {
+                if (password == confirmPassword) {
+                    onRegister(email, password)
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            enabled = ui != UiState.Loading &&
+                    email.isNotBlank() &&
+                    password.length >= 6 &&
+                    password == confirmPassword
+        ) {
+            if (ui == UiState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Text("Crear cuenta")
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        TextButton(onClick = onBackToLogin) {
+            Text("¿Ya tienes cuenta? Inicia sesión")
+        }
+    }
+}
+
+// El resto del código se mantiene igual...
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(vm: ExpensesViewModel, onLogout: () -> Unit) {
